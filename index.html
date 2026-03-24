@@ -534,6 +534,73 @@
     width: 196px;
   }
 
+  /* ===== Variables ===== */
+  .global-vars-panel {
+    background: var(--card);
+    border: 1px solid #fed7aa;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .vars-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    background: linear-gradient(135deg, #fffbf5, #fff7ed);
+    cursor: pointer;
+    user-select: none;
+  }
+  .vars-panel-header h3 { font-size: 13px; font-weight: 600; color: #92400e; flex: 1; }
+  .vars-count {
+    font-size: 11px; color: #b45309;
+    background: #fde68a; padding: 1px 7px; border-radius: 10px;
+  }
+  .vars-panel-body { padding: 8px 14px 10px; }
+
+  .graph-vars-section {
+    margin-bottom: 10px;
+    padding: 6px 10px;
+    background: #fffbf5;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+  }
+  .graph-vars-header { display: flex; align-items: center; gap: 4px; }
+  .graph-vars-header > span {
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    color: #b45309; flex: 1;
+  }
+  .vars-add-btn {
+    font-size: 14px !important; padding: 1px 7px !important; line-height: 1 !important;
+    color: #b45309 !important; border-color: #fcd34d !important;
+  }
+  .vars-add-btn:hover { background: #fef3c7 !important; }
+
+  .var-row { display: flex; align-items: center; gap: 5px; padding: 3px 0; }
+  .var-name-input {
+    width: 70px;
+    font-family: 'SF Mono','Fira Code',monospace; font-size: 12px;
+    padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: #fff;
+  }
+  .var-name-input:focus { outline: none; border-color: #f59e0b; }
+  .var-eq { color: var(--text-muted); font-size: 13px; font-weight: 500; flex-shrink: 0; }
+  .var-value-input {
+    flex: 1; min-width: 60px;
+    font-family: 'SF Mono','Fira Code',monospace; font-size: 12px;
+    padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: #fff;
+  }
+  .var-value-input:focus { outline: none; border-color: #f59e0b; }
+  .var-preview {
+    font-size: 11px; color: var(--text-muted);
+    font-family: 'SF Mono','Fira Code',monospace;
+    background: var(--bg); padding: 2px 5px; border-radius: 4px;
+    min-width: 40px; text-align: right; flex-shrink: 0;
+  }
+  .var-err { color: var(--danger) !important; background: #fee2e2 !important; }
+  .vars-empty { font-size: 12px; color: var(--text-muted); padding: 3px 0; font-style: italic; }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -559,6 +626,17 @@
 <input type="file" id="import-file-input" accept=".json,application/json" style="display:none" onchange="handleImportFile(this)">
 
 <main id="app">
+  <div id="global-vars-panel" class="global-vars-panel">
+    <div class="vars-panel-header" onclick="toggleGlobalVarsPanel()">
+      <h3>𝓍 Variables globales</h3>
+      <span class="vars-count" id="global-vars-count">0 variable</span>
+      <button class="btn btn-ghost vars-add-btn" onclick="event.stopPropagation();addVar('global',null)" title="Ajouter une variable">+</button>
+      <button class="curves-toggle-btn" id="global-vars-toggle">▼</button>
+    </div>
+    <div id="global-vars-body" class="vars-panel-body">
+      <div id="global-vars-rows"><p class="vars-empty">Aucune variable globale.</p></div>
+    </div>
+  </div>
   <div class="empty-state" id="empty-state">
     <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
       <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -632,6 +710,13 @@
         <label>Couleur</label>
         <div id="edit-color-picker-mount"></div>
       </div>
+      <div class="modal-form-group">
+        <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span>Variables locales <span style="font-weight:400;color:var(--text-muted);font-size:12px">(surchargent graphique &amp; global)</span></span>
+          <button class="btn btn-ghost vars-add-btn" onclick="addVar('curve',null)">+ Variable</button>
+        </label>
+        <div id="curve-vars-list"><p class="vars-empty">Aucune variable locale.</p></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeEditCurve()">Annuler</button>
@@ -693,19 +778,40 @@
 <script>
 // ===== STATE =====
 let graphs = [];
+let globalVars = [];
+let currentEditCurveVars = [];
+let globalVarsCollapsed = false;
 let chartInstances = {};
 
 // ===== INIT =====
 function init() {
   const saved = localStorage.getItem('visuGraph_data');
   if (saved) {
-    try { graphs = JSON.parse(saved); } catch(e) { graphs = []; }
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        graphs = parsed; globalVars = [];
+      } else {
+        graphs = parsed.graphs || [];
+        globalVars = parsed.globalVars || [];
+      }
+    } catch(e) { graphs = []; globalVars = []; }
   }
+  migrateData();
   renderAll();
+  renderGlobalVarRows();
+}
+
+function migrateData() {
+  graphs.forEach(g => {
+    if (!g.vars) g.vars = [];
+    if (g.varsCollapsed === undefined) g.varsCollapsed = true;
+    (g.curves || []).forEach(c => { if (!c.vars) c.vars = []; });
+  });
 }
 
 function save() {
-  localStorage.setItem('visuGraph_data', JSON.stringify(graphs));
+  localStorage.setItem('visuGraph_data', JSON.stringify({ version: 1, globalVars, graphs }));
 }
 
 // ===== GRAPH CRUD =====
@@ -722,6 +828,8 @@ function addGraph() {
     yAuto: true,
     ymin: 0,
     ymax: 100,
+    vars: [],
+    varsCollapsed: true,
     curves: [],
     showAddForm: false,
     curvesCollapsed: false
@@ -765,7 +873,7 @@ function addCurve(graphId) {
   const formula = formulaEl.value.trim();
   if (!formula) { showError(errEl, 'La formule est requise.'); return; }
 
-  const testErr = testFormula(formula, g.variable, g.xmin);
+  const testErr = testFormula(formula, g.variable, g.xmin, getGraphScope(g));
   if (testErr) { showError(errEl, testErr); return; }
 
   errEl.textContent = '';
@@ -774,7 +882,8 @@ function addCurve(graphId) {
     name,
     formula,
     color: colorHidden ? colorHidden.value : randomColor(),
-    enabled: true
+    enabled: true,
+    vars: []
   });
   g.showAddForm = false;
   save();
@@ -812,9 +921,10 @@ function openEditCurve(graphId, curveId) {
   document.getElementById('edit-curve-name').value = c.name;
   document.getElementById('edit-curve-formula').value = c.formula;
   document.getElementById('edit-formula-error').textContent = '';
-  // mount color picker
   const mount = document.getElementById('edit-color-picker-mount');
   mount.innerHTML = colorPickerHTML('edit-curve-color', c.color);
+  currentEditCurveVars = JSON.parse(JSON.stringify(c.vars || []));
+  renderCurveVarsList();
   document.getElementById('edit-curve-modal').style.display = 'flex';
 }
 
@@ -829,7 +939,8 @@ function validateEditFormula() {
   const formula = document.getElementById('edit-curve-formula').value.trim();
   const errEl = document.getElementById('edit-formula-error');
   if (!formula) { errEl.textContent = ''; return; }
-  const err = testFormula(formula, g.variable, g.xmin);
+  const scope = resolveVars(currentEditCurveVars, getGraphScope(g));
+  const err = testFormula(formula, g.variable, g.xmin, scope);
   errEl.textContent = err || '';
   document.getElementById('edit-curve-formula').classList.toggle('error', !!err);
 }
@@ -842,7 +953,8 @@ function saveEditCurve() {
   if (!c) return;
 
   const formula = document.getElementById('edit-curve-formula').value.trim();
-  const err = testFormula(formula, g.variable, g.xmin);
+  const scope = resolveVars(currentEditCurveVars, getGraphScope(g));
+  const err = testFormula(formula, g.variable, g.xmin, scope);
   if (err) {
     document.getElementById('edit-formula-error').textContent = err;
     return;
@@ -850,6 +962,7 @@ function saveEditCurve() {
 
   c.name = document.getElementById('edit-curve-name').value.trim() || c.name;
   c.formula = formula;
+  c.vars = currentEditCurveVars;
   const editColorHidden = document.getElementById('edit-curve-color');
   c.color = editColorHidden ? editColorHidden.value : c.color;
   save();
@@ -1039,6 +1152,17 @@ function graphCardHTML(g) {
         </div>
       </div>
 
+      <div class="graph-vars-section">
+        <div class="graph-vars-header">
+          <span>Variables du graphique${(g.vars||[]).length > 0 ? ' (' + g.vars.length + ')' : ''}</span>
+          <button class="btn btn-ghost vars-add-btn" onclick="addVar('graph','${g.id}')" title="Ajouter">+</button>
+          <button class="curves-toggle-btn" id="gvars-toggle-${g.id}" onclick="toggleGraphVarsSection('${g.id}')" title="${g.varsCollapsed?'Déplier':'Replier'}">${g.varsCollapsed?'▶':'▼'}</button>
+        </div>
+        <div id="gvars-body-${g.id}" style="display:${g.varsCollapsed?'none':'block'}">
+          <div id="gvars-rows-${g.id}">${graphVarsHTML(g)}</div>
+        </div>
+      </div>
+
       <div class="chart-wrapper">
         <canvas id="canvas-${g.id}"></canvas>
       </div>
@@ -1095,8 +1219,7 @@ function updateChart(g) {
     .map(c => {
       const data = labels.map(x => {
         try {
-          const scope = {};
-          scope[g.variable] = x;
+          const scope = buildScope(g, c, x);
           const result = math.evaluate(c.formula, scope);
           return (typeof result === 'number' && isFinite(result)) ? result : null;
         } catch(e) { return null; }
@@ -1174,10 +1297,9 @@ function generateX(min, max, step) {
 }
 
 // ===== FORMULA VALIDATION =====
-function testFormula(formula, variable, testX) {
+function testFormula(formula, variable, testX, extraScope = {}) {
   try {
-    const scope = {};
-    scope[variable] = testX;
+    const scope = { ...extraScope, [variable]: testX };
     const r = math.evaluate(formula, scope);
     if (typeof r !== 'number') return 'La formule doit retourner un nombre.';
     return null;
@@ -1192,7 +1314,7 @@ function liveValidate(graphId) {
   const formula = document.getElementById('add-formula-' + graphId).value.trim();
   const errEl = document.getElementById('add-error-' + graphId);
   if (!formula) { errEl.textContent = ''; return; }
-  const err = testFormula(formula, g.variable, g.xmin);
+  const err = testFormula(formula, g.variable, g.xmin, getGraphScope(g));
   errEl.textContent = err || '';
 }
 
@@ -1204,6 +1326,198 @@ function quickColorChange(graphId, curveId, color) {
   c.color = color;
   save();
   updateChart(g);
+}
+
+// ===== VARIABLE SCOPE ENGINE =====
+function resolveVars(varList, initialScope = {}) {
+  const scope = { ...initialScope };
+  for (const v of (varList || [])) {
+    const name = (v.name || '').trim();
+    const val = (v.value || '').trim();
+    if (!name || !val) continue;
+    try {
+      const result = math.evaluate(val, { ...scope });
+      if (typeof result === 'number' && isFinite(result)) scope[name] = result;
+    } catch(e) {}
+  }
+  return scope;
+}
+function getGlobalScope() { return resolveVars(globalVars, {}); }
+function getGraphScope(g) { return resolveVars(g.vars || [], getGlobalScope()); }
+function getCurveScope(g, c) { return resolveVars(c.vars || [], getGraphScope(g)); }
+function buildScope(g, c, xVal) {
+  const scope = getCurveScope(g, c);
+  scope[g.variable] = xVal;
+  return scope;
+}
+function getBaseScope(scope, graphId) {
+  if (scope === 'global') return {};
+  if (scope === 'graph') return getGlobalScope();
+  const g = graphs.find(g => g.id === graphId);
+  return g ? getGraphScope(g) : getGlobalScope();
+}
+function getVarObj(scope, varId, graphId) {
+  if (scope === 'global') return globalVars.find(v => v.id === varId);
+  if (scope === 'graph') { const g = graphs.find(g => g.id === graphId); return g && (g.vars||[]).find(v => v.id === varId); }
+  return currentEditCurveVars.find(v => v.id === varId);
+}
+
+// ===== VARIABLE ROW HTML =====
+function varRowHTML(scope, v, baseScope, graphId) {
+  let preview = '', isErr = false;
+  if ((v.value||'').trim()) {
+    try {
+      const res = math.evaluate(v.value, { ...baseScope });
+      preview = (typeof res === 'number' && isFinite(res)) ? '\u2248\u00a0' + +res.toFixed(6) : '?';
+    } catch(e) { preview = '✕'; isErr = true; }
+  }
+  const ga = graphId ? `'${graphId}'` : 'null';
+  return `<div class="var-row" id="vrow-${scope}-${v.id}">
+    <input class="var-name-input" value="${esc(v.name)}" placeholder="k"
+           oninput="setVarField('${scope}','${v.id}','name',this.value,${ga})">
+    <span class="var-eq">=</span>
+    <input class="var-value-input" value="${esc(v.value)}" placeholder="3.14"
+           oninput="setVarField('${scope}','${v.id}','value',this.value,${ga})">
+    <span class="var-preview${isErr?' var-err':''}" id="vprev-${scope}-${v.id}">${preview}</span>
+    <button class="btn btn-danger btn-icon" style="padding:2px 6px;font-size:11px"
+            onclick="deleteVar('${scope}','${v.id}',${ga})">✕</button>
+  </div>`;
+}
+
+function graphVarsHTML(g) {
+  const vars = g.vars || [];
+  if (!vars.length) return '<p class="vars-empty">Aucune variable. Cliquez + pour en ajouter.</p>';
+  const base = getGlobalScope();
+  return vars.map(v => varRowHTML('graph', v, base, g.id)).join('');
+}
+
+// ===== VARIABLE CRUD =====
+function addVar(scope, graphId) {
+  const newV = { id: uid(), name: '', value: '' };
+  if (scope === 'global') {
+    globalVars.push(newV);
+    save();
+    renderGlobalVarRows();
+  } else if (scope === 'graph') {
+    const g = graphs.find(g => g.id === graphId);
+    if (!g) return;
+    if (!g.vars) g.vars = [];
+    g.vars.push(newV);
+    g.varsCollapsed = false;
+    save();
+    renderGraphVarRows(graphId);
+    const body = document.getElementById('gvars-body-' + graphId);
+    const btn = document.getElementById('gvars-toggle-' + graphId);
+    if (body) body.style.display = 'block';
+    if (btn) btn.textContent = '▼';
+  } else {
+    currentEditCurveVars.push(newV);
+    renderCurveVarsList();
+  }
+  requestAnimationFrame(() => {
+    const row = document.getElementById('vrow-' + scope + '-' + newV.id);
+    if (row) row.querySelector('.var-name-input').focus();
+  });
+}
+
+function deleteVar(scope, varId, graphId) {
+  document.getElementById('vrow-' + scope + '-' + varId)?.remove();
+  if (scope === 'global') {
+    globalVars = globalVars.filter(v => v.id !== varId);
+    save();
+    updateGlobalVarsCount();
+    graphs.forEach(g => updateChart(g));
+  } else if (scope === 'graph') {
+    const g = graphs.find(g => g.id === graphId);
+    if (g) { g.vars = (g.vars||[]).filter(v => v.id !== varId); save(); updateChart(g); }
+  } else {
+    currentEditCurveVars = currentEditCurveVars.filter(v => v.id !== varId);
+  }
+}
+
+function setVarField(scope, varId, field, val, graphId) {
+  const v = getVarObj(scope, varId, graphId);
+  if (!v) return;
+  v[field] = val;
+  if (scope !== 'curve') {
+    save();
+    if (scope === 'global') { updateGlobalVarsCount(); graphs.forEach(g => updateChart(g)); }
+    else if (scope === 'graph') { const g = graphs.find(g => g.id === graphId); if (g) updateChart(g); }
+  }
+  if (field === 'value') {
+    const el = document.getElementById('vprev-' + scope + '-' + varId);
+    if (!el) return;
+    let text = '', isErr = false;
+    if (val.trim()) {
+      try {
+        const base = getBaseScope(scope, graphId);
+        const res = math.evaluate(val, { ...base });
+        text = (typeof res === 'number' && isFinite(res)) ? '\u2248\u00a0' + +res.toFixed(6) : '?';
+      } catch(e) { text = '✕'; isErr = true; }
+    }
+    el.textContent = text;
+    el.className = 'var-preview' + (isErr ? ' var-err' : '');
+  }
+}
+
+// ===== VARIABLE RENDER FUNCTIONS =====
+function renderGlobalVarRows() {
+  const el = document.getElementById('global-vars-rows');
+  if (!el) return;
+  el.innerHTML = globalVars.length
+    ? globalVars.map(v => varRowHTML('global', v, {}, null)).join('')
+    : '<p class="vars-empty">Aucune variable globale.</p>';
+  updateGlobalVarsCount();
+}
+
+function updateGlobalVarsCount() {
+  const el = document.getElementById('global-vars-count');
+  if (el) el.textContent = globalVars.length + ' variable' + (globalVars.length > 1 ? 's' : '');
+}
+
+function renderGraphVarRows(graphId) {
+  const el = document.getElementById('gvars-rows-' + graphId);
+  if (!el) return;
+  const g = graphs.find(g => g.id === graphId);
+  if (!g) return;
+  const vars = g.vars || [];
+  el.innerHTML = vars.length
+    ? vars.map(v => varRowHTML('graph', v, getGlobalScope(), graphId)).join('')
+    : '<p class="vars-empty">Aucune variable. Cliquez + pour en ajouter.</p>';
+  // update count in header
+  const header = el.closest('.graph-vars-section')?.querySelector('.graph-vars-header > span');
+  if (header) header.textContent = 'Variables du graphique' + (vars.length > 0 ? ' (' + vars.length + ')' : '');
+}
+
+function renderCurveVarsList() {
+  const el = document.getElementById('curve-vars-list');
+  if (!el) return;
+  const graphId = document.getElementById('edit-graph-id').value;
+  const g = graphs.find(g => g.id === graphId);
+  const base = g ? getGraphScope(g) : {};
+  el.innerHTML = currentEditCurveVars.length
+    ? currentEditCurveVars.map(v => varRowHTML('curve', v, base, graphId)).join('')
+    : '<p class="vars-empty">Aucune variable locale.</p>';
+}
+
+// ===== VARIABLE TOGGLE =====
+function toggleGlobalVarsPanel() {
+  globalVarsCollapsed = !globalVarsCollapsed;
+  const body = document.getElementById('global-vars-body');
+  const btn = document.getElementById('global-vars-toggle');
+  if (body) body.style.display = globalVarsCollapsed ? 'none' : 'block';
+  if (btn) btn.textContent = globalVarsCollapsed ? '▶' : '▼';
+}
+
+function toggleGraphVarsSection(graphId) {
+  const g = graphs.find(g => g.id === graphId);
+  if (!g) return;
+  g.varsCollapsed = !g.varsCollapsed;
+  save();
+  const body = document.getElementById('gvars-body-' + graphId);
+  const btn = document.getElementById('gvars-toggle-' + graphId);
+  if (body) body.style.display = g.varsCollapsed ? 'none' : 'block';
+  if (btn) { btn.textContent = g.varsCollapsed ? '▶' : '▼'; btn.title = g.varsCollapsed ? 'Déplier' : 'Replier'; }
 }
 
 // ===== HELP =====
@@ -1334,7 +1648,7 @@ function rowPickColor(graphId, curveId, color, sourceEl) {
 
 // ===== EXPORT / IMPORT =====
 function exportJSON() {
-  const data = JSON.stringify(graphs, null, 2);
+  const data = JSON.stringify({ version: 1, globalVars, graphs }, null, 2);
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1356,14 +1670,21 @@ function handleImportFile(input) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const data = JSON.parse(e.target.result);
-      if (!Array.isArray(data)) throw new Error('Format invalide : tableau attendu.');
-      // destroy existing charts
+      const parsed = JSON.parse(e.target.result);
+      let importedGraphs, importedGlobalVars;
+      if (Array.isArray(parsed)) {
+        importedGraphs = parsed; importedGlobalVars = [];
+      } else if (parsed.graphs) {
+        importedGraphs = parsed.graphs; importedGlobalVars = parsed.globalVars || [];
+      } else { throw new Error('Format invalide.'); }
       Object.values(chartInstances).forEach(c => c.destroy());
       chartInstances = {};
-      graphs = data;
+      graphs = importedGraphs;
+      globalVars = importedGlobalVars;
+      migrateData();
       save();
       renderAll();
+      renderGlobalVarRows();
       showToast(`${graphs.length} graphique(s) importé(s).`);
     } catch(err) {
       alert('Erreur d\'import : ' + err.message);

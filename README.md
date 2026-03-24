@@ -1,0 +1,2 @@
+- [x] Export/import en json
+- [x] Rajouter variable d'environnement Global, par groupe de graph et par graph
