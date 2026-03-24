@@ -120,10 +120,58 @@ Le format JSON est rétro-compatible avec les exports sans variables globales.
 
 ---
 
+---
+
+### Mode sombre
+
+Bouton 🌙/☀ dans l'en-tête. La préférence est persistée dans le localStorage.
+
+---
+
+## PWA — Mode hors ligne
+
+VisuGraph est une Progressive Web App. Après le premier chargement en ligne, l'application fonctionne **entièrement hors réseau**.
+
+Le service worker (`sw.js`) met en cache :
+- `index.html`, `manifest.json`, `icon.svg`
+- Chart.js et mathjs depuis jsDelivr
+
+Stratégie **cache-first** : les ressources déjà vues sont servies instantanément. Les nouvelles ressources sont mises en cache à la volée.
+
+> ⚠️ Le service worker nécessite **HTTPS** (ou `localhost`).
+
+Sur mobile, l'application peut être installée sur l'écran d'accueil via le menu du navigateur.
+
+---
+
+## Déploiement via GitHub Actions
+
+Le workflow `.github/workflows/deploy.yml` se déclenche automatiquement à chaque push sur `main` et déploie les fichiers via FTP.
+
+À chaque déploiement, la version du cache service worker est automatiquement mise à jour avec le SHA du commit, garantissant que les utilisateurs reçoivent bien la nouvelle version.
+
+### Secrets à configurer
+
+Dans **Settings → Secrets and variables → Actions** du dépôt GitHub :
+
+| Secret | Valeur |
+|---|---|
+| `FTP_HOST` | Hôte FTP (ex : `ftp.mondomaine.fr`) |
+| `FTP_USER` | Identifiant FTP |
+| `FTP_PASSWORD` | Mot de passe FTP |
+
+Les fichiers `.git/`, `.github/` et `README.md` sont exclus du transfert.
+
+---
+
 ## Architecture
 
 ```
-index.html          ← application complète (HTML + CSS + JS, ~1500 lignes)
+index.html                        ← application complète (HTML + CSS + JS)
+manifest.json                     ← manifest PWA
+sw.js                             ← service worker (cache offline)
+icon.svg                          ← icône PWA
+.github/workflows/deploy.yml      ← CI/CD déploiement FTP
 ```
 
 ### Dépendances CDN
