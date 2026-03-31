@@ -86,7 +86,19 @@ Chaque variable dispose d'un champ **libellé** optionnel (purement cosmétique)
 k  =  7    libellé : "nombre de jours par semaine"
 ```
 
-Lorsqu'une variable possède un libellé, son nom apparaît **souligné en pointillés** dans les formules des courbes. Survoler ce nom affiche le libellé dans une info-bulle.
+Lorsqu'une variable possède un libellé ou une valeur calculable, son nom apparaît **souligné en pointillés** dans les formules des courbes. Survoler ce nom affiche `libellé = ≈ valeur` dans une info-bulle. La valeur affichée est celle effective dans le scope du graphique (surcharges incluses).
+
+#### Renommage automatique
+
+Modifier le nom d'une variable (clé) **propage le changement** dans toutes les formules et valeurs de variables dans sa portée. Le renommage s'effectue au moment où l'on quitte le champ (blur), avec correspondance par mot entier.
+
+#### Réorganisation
+
+Chaque ligne de variable dispose de boutons **↑ ↓** pour changer l'ordre. L'ordre influe sur la résolution des références entre variables.
+
+#### Variables non utilisées
+
+Une variable dont le nom n'apparaît dans aucune formule ni valeur de son scope est signalée visuellement : **bordure gauche ambrée** et **nom en orange**. Un tooltip indique "Variable non utilisée dans aucune équation".
 
 ---
 
@@ -113,6 +125,17 @@ La variable X est configurable par graphique (défaut : `n`). Les variables déf
 | `min(a, b)` | Minimum | `min(n^2, 10)` |
 
 L'icône **?** en haut à droite affiche ce tableau de référence dans l'application.
+
+---
+
+### Annuler une action
+
+**Ctrl+Z** (ou **Cmd+Z** sur Mac) annule la dernière action.
+
+- 50 niveaux d'historique disponibles
+- Les frappes rapides dans un champ sont groupées en un seul step d'undo
+- L'historique est en mémoire et se réinitialise au rechargement de la page
+- Ctrl+Z dans un champ texte conserve le comportement natif du navigateur (annuler le caractère)
 
 ---
 
