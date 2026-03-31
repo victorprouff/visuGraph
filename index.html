@@ -587,7 +587,7 @@
 
   .var-row { display: flex; align-items: center; gap: 5px; padding: 3px 0; }
   .var-name-input {
-    width: 210px;
+    width: 90px; flex-shrink: 0;
     font-family: 'SF Mono','Fira Code',monospace; font-size: 12px;
     padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: #fff;
   }
@@ -599,6 +599,17 @@
     padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: #fff;
   }
   .var-value-input:focus { outline: none; border-color: #f59e0b; }
+  .var-label-input {
+    flex: 1.2; min-width: 80px;
+    font-size: 12px; font-style: italic; color: var(--text-muted);
+    padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: #fff;
+  }
+  .var-label-input:focus { outline: none; border-color: #f59e0b; color: var(--text); }
+  .formula-var-tip {
+    text-decoration: underline dotted currentColor;
+    text-underline-offset: 2px;
+    cursor: help;
+  }
   .var-preview {
     font-size: 11px; color: var(--text-muted);
     font-family: 'SF Mono','Fira Code',monospace;
@@ -645,7 +656,8 @@
   body.dark .vars-add-btn { color: #f59e0b !important; border-color: #5c3d11 !important; }
   body.dark .vars-add-btn:hover { background: #2d1e08 !important; }
   body.dark .var-name-input,
-  body.dark .var-value-input { background: var(--bg); color: var(--text); border-color: var(--border); }
+  body.dark .var-value-input,
+  body.dark .var-label-input { background: var(--bg); color: var(--text); border-color: var(--border); }
   body.dark .var-preview { background: #2a2a34; }
   body.dark .var-err { background: #3d1212 !important; color: #f87171 !important; }
 
@@ -1185,10 +1197,28 @@ function renderGraphCard(g) {
   updateChart(g);
 }
 
+function formulaWithTooltips(formula, labelMap) {
+  const names = Object.keys(labelMap).filter(n => n && labelMap[n]).sort((a, b) => b.length - a.length);
+  if (!names.length) return esc(formula);
+  const pattern = new RegExp('\\b(' + names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b', 'g');
+  let result = '', lastIndex = 0, match;
+  pattern.lastIndex = 0;
+  while ((match = pattern.exec(formula)) !== null) {
+    result += esc(formula.slice(lastIndex, match.index));
+    result += `<span class="formula-var-tip" title="${esc(labelMap[match[1]])}">${esc(match[1])}</span>`;
+    lastIndex = pattern.lastIndex;
+  }
+  return result + esc(formula.slice(lastIndex));
+}
+
 function graphCardHTML(g) {
   const idx = graphs.findIndex(gg => gg.id === g.id);
   const isFirst = idx === 0;
   const isLast = idx === graphs.length - 1;
+
+  const varLabelMap = {};
+  globalVars.forEach(v => { if (v.name && v.label) varLabelMap[v.name] = v.label; });
+  (g.vars || []).forEach(v => { if (v.name && v.label) varLabelMap[v.name] = v.label; });
 
   const curvesHTML = g.curves.map(c => `
     <div class="curve-row ${c.enabled ? '' : 'curve-disabled'}" id="curve-row-${c.id}">
@@ -1205,7 +1235,7 @@ function graphCardHTML(g) {
         </div>
       </div>
       <span class="curve-name" title="${esc(c.name)}">${esc(c.name)}</span>
-      <span class="curve-formula" title="${esc(c.formula)}">${esc(c.formula)}</span>
+      <span class="curve-formula" title="${esc(c.formula)}">${formulaWithTooltips(c.formula, varLabelMap)}</span>
       <div class="curve-actions">
         <button class="btn btn-ghost btn-icon" title="Modifier" onclick="openEditCurve('${g.id}','${c.id}')">✎</button>
         <button class="btn btn-danger btn-icon" title="Supprimer" onclick="removeCurve('${g.id}','${c.id}')">✕</button>
@@ -1464,11 +1494,13 @@ function varRowHTML(scope, v, baseScope, graphId) {
   const ga = graphId ? `'${graphId}'` : 'null';
   return `<div class="var-row" id="vrow-${scope}-${v.id}">
     <input class="var-name-input" value="${esc(v.name)}" placeholder="k"
-           oninput="setVarField('${scope}','${v.id}','name',this.value,${ga})">
+           oninput="setVarField('${scope}','${v.id}','name',this.value,${ga})" title="Nom de la variable">
     <span class="var-eq">=</span>
     <input class="var-value-input" value="${esc(v.value)}" placeholder="3.14"
            oninput="setVarField('${scope}','${v.id}','value',this.value,${ga})">
     <span class="var-preview${isErr?' var-err':''}" id="vprev-${scope}-${v.id}">${preview}</span>
+    <input class="var-label-input" value="${esc(v.label||'')}" placeholder="libellé…"
+           oninput="setVarField('${scope}','${v.id}','label',this.value,${ga})" title="Libellé (cosmétique)">
     <button class="btn btn-danger btn-icon" style="padding:2px 6px;font-size:11px"
             onclick="deleteVar('${scope}','${v.id}',${ga})">✕</button>
   </div>`;
