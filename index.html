@@ -856,6 +856,10 @@ let currentEditCurveVars = [];
 let globalVarsCollapsed = false;
 let chartInstances = {};
 let darkMode = false;
+let undoStack = [];
+let undoLastState = null;
+let undoPendingState = null;
+let undoTimer = null;
 
 // ===== INIT =====
 function init() {
@@ -876,6 +880,7 @@ function init() {
   applyTheme(false);
   renderAll();
   renderGlobalVarRows();
+  undoLastState = JSON.stringify({ version: 1, globalVars, graphs });
 }
 
 function toggleTheme() {
@@ -901,7 +906,47 @@ function migrateData() {
 }
 
 function save() {
-  localStorage.setItem('visuGraph_data', JSON.stringify({ version: 1, globalVars, graphs }));
+  const newState = JSON.stringify({ version: 1, globalVars, graphs });
+  if (undoLastState !== null && undoLastState !== newState) {
+    if (!undoPendingState) undoPendingState = undoLastState;
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => {
+      if (undoPendingState && (!undoStack.length || undoStack[undoStack.length - 1] !== undoPendingState)) {
+        undoStack.push(undoPendingState);
+        if (undoStack.length > 50) undoStack.shift();
+      }
+      undoPendingState = null;
+      undoTimer = null;
+    }, 600);
+  }
+  undoLastState = newState;
+  localStorage.setItem('visuGraph_data', newState);
+}
+
+function undo() {
+  // Flush pending debounced state immediately
+  if (undoTimer) {
+    clearTimeout(undoTimer);
+    undoTimer = null;
+    if (undoPendingState && (!undoStack.length || undoStack[undoStack.length - 1] !== undoPendingState)) {
+      undoStack.push(undoPendingState);
+      if (undoStack.length > 50) undoStack.shift();
+    }
+    undoPendingState = null;
+  }
+  if (!undoStack.length) { showToast('Rien à annuler.'); return; }
+  const prev = undoStack.pop();
+  const parsed = JSON.parse(prev);
+  Object.values(chartInstances).forEach(c => c.destroy());
+  chartInstances = {};
+  globalVars = parsed.globalVars || [];
+  graphs = parsed.graphs || [];
+  migrateData();
+  undoLastState = prev;
+  localStorage.setItem('visuGraph_data', prev);
+  renderAll();
+  renderGlobalVarRows();
+  showToast('Action annulée.');
 }
 
 // ===== GRAPH CRUD =====
@@ -1955,12 +2000,18 @@ document.addEventListener('click', e => {
   }
 });
 
-// Close modals on Escape
+// Close modals on Escape / Undo on Ctrl+Z
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closeHelp();
     closeEditCurve();
     closeEditGraph();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return; // laisser l'undo natif du navigateur
+    e.preventDefault();
+    undo();
   }
 });
 
