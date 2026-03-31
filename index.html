@@ -586,6 +586,8 @@
   .vars-add-btn:hover { background: #fef3c7 !important; }
 
   .var-row { display: flex; align-items: center; gap: 5px; padding: 3px 0; }
+  .var-move-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+  .var-move-btn { padding: 0px 4px !important; font-size: 10px !important; line-height: 1.2; min-width: 18px; }
   .var-name-input {
     width: 90px; flex-shrink: 0;
     font-family: 'SF Mono','Fira Code',monospace; font-size: 12px;
@@ -1494,7 +1496,7 @@ function getVarObj(scope, varId, graphId) {
 }
 
 // ===== VARIABLE ROW HTML =====
-function varRowHTML(scope, v, baseScope, graphId) {
+function varRowHTML(scope, v, baseScope, graphId, isFirst, isLast) {
   let preview = '', isErr = false;
   if ((v.value||'').trim()) {
     try {
@@ -1504,6 +1506,10 @@ function varRowHTML(scope, v, baseScope, graphId) {
   }
   const ga = graphId ? `'${graphId}'` : 'null';
   return `<div class="var-row" id="vrow-${scope}-${v.id}">
+    <div class="var-move-btns">
+      <button class="btn btn-ghost btn-icon var-move-btn" onclick="moveVar('${scope}','${v.id}',-1,${ga})" ${isFirst ? 'disabled' : ''} title="Monter">↑</button>
+      <button class="btn btn-ghost btn-icon var-move-btn" onclick="moveVar('${scope}','${v.id}',1,${ga})" ${isLast ? 'disabled' : ''} title="Descendre">↓</button>
+    </div>
     <input class="var-name-input" value="${esc(v.name)}" placeholder="k"
            onfocus="this.dataset.orig=this.value"
            oninput="setVarField('${scope}','${v.id}','name',this.value,${ga})"
@@ -1524,7 +1530,7 @@ function graphVarsHTML(g) {
   const vars = g.vars || [];
   if (!vars.length) return '<p class="vars-empty">Aucune variable. Cliquez + pour en ajouter.</p>';
   const base = getGlobalScope();
-  return vars.map(v => varRowHTML('graph', v, base, g.id)).join('');
+  return vars.map((v, i, a) => varRowHTML('graph', v, base, g.id, i === 0, i === a.length - 1)).join('');
 }
 
 // ===== VARIABLE CRUD =====
@@ -1554,6 +1560,21 @@ function addVar(scope, graphId) {
     const row = document.getElementById('vrow-' + scope + '-' + newV.id);
     if (row) row.querySelector('.var-name-input').focus();
   });
+}
+
+function moveVar(scope, varId, dir, graphId) {
+  let arr;
+  if (scope === 'global') arr = globalVars;
+  else if (scope === 'graph') { const g = graphs.find(g => g.id === graphId); arr = g && g.vars; }
+  else arr = currentEditCurveVars;
+  if (!arr) return;
+  const i = arr.findIndex(v => v.id === varId);
+  const j = i + dir;
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  if (scope === 'global') { save(); renderGlobalVarRows(); graphs.forEach(g => updateChart(g)); }
+  else if (scope === 'graph') { save(); renderGraphVarRows(graphId); const g = graphs.find(g => g.id === graphId); if (g) updateChart(g); }
+  else renderCurveVarsList();
 }
 
 function deleteVar(scope, varId, graphId) {
@@ -1656,7 +1677,7 @@ function renderGlobalVarRows() {
   const el = document.getElementById('global-vars-rows');
   if (!el) return;
   el.innerHTML = globalVars.length
-    ? globalVars.map(v => varRowHTML('global', v, {}, null)).join('')
+    ? globalVars.map((v, i, a) => varRowHTML('global', v, {}, null, i === 0, i === a.length - 1)).join('')
     : '<p class="vars-empty">Aucune variable globale.</p>';
   updateGlobalVarsCount();
 }
@@ -1673,7 +1694,7 @@ function renderGraphVarRows(graphId) {
   if (!g) return;
   const vars = g.vars || [];
   el.innerHTML = vars.length
-    ? vars.map(v => varRowHTML('graph', v, getGlobalScope(), graphId)).join('')
+    ? vars.map((v, i, a) => varRowHTML('graph', v, getGlobalScope(), graphId, i === 0, i === a.length - 1)).join('')
     : '<p class="vars-empty">Aucune variable. Cliquez + pour en ajouter.</p>';
   // update count in header
   const header = el.closest('.graph-vars-section')?.querySelector('.graph-vars-header > span');
@@ -1687,7 +1708,7 @@ function renderCurveVarsList() {
   const g = graphs.find(g => g.id === graphId);
   const base = g ? getGraphScope(g) : {};
   el.innerHTML = currentEditCurveVars.length
-    ? currentEditCurveVars.map(v => varRowHTML('curve', v, base, graphId)).join('')
+    ? currentEditCurveVars.map((v, i, a) => varRowHTML('curve', v, base, graphId, i === 0, i === a.length - 1)).join('')
     : '<p class="vars-empty">Aucune variable locale.</p>';
 }
 
