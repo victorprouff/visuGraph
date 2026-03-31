@@ -585,7 +585,9 @@
   }
   .vars-add-btn:hover { background: #fef3c7 !important; }
 
-  .var-row { display: flex; align-items: center; gap: 5px; padding: 3px 0; }
+  .var-row { display: flex; align-items: center; gap: 5px; padding: 3px 0; border-left: 2px solid transparent; padding-left: 4px; }
+  .var-unused { border-left-color: #f59e0b; }
+  .var-unused .var-name-input { color: #b45309; }
   .var-move-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
   .var-move-btn { padding: 0px 4px !important; font-size: 10px !important; line-height: 1.2; min-width: 18px; }
   .var-name-input {
@@ -660,6 +662,7 @@
   body.dark .var-name-input,
   body.dark .var-value-input,
   body.dark .var-label-input { background: var(--bg); color: var(--text); border-color: var(--border); }
+  body.dark .var-unused .var-name-input { color: #fbbf24; }
   body.dark .var-preview { background: #2a2a34; }
   body.dark .var-err { background: #3d1212 !important; color: #f87171 !important; }
 
@@ -1495,6 +1498,28 @@ function getVarObj(scope, varId, graphId) {
   return currentEditCurveVars.find(v => v.id === varId);
 }
 
+// ===== VARIABLE USAGE DETECTION =====
+function isVarUsed(varName, scope, graphId) {
+  if (!varName) return true;
+  const re = new RegExp('\\b' + varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+  const hit = t => re.test(t || '');
+  if (scope === 'global') {
+    if (globalVars.some(v => hit(v.value))) return true;
+    return graphs.some(g =>
+      (g.vars || []).some(v => hit(v.value)) ||
+      g.curves.some(c => hit(c.formula) || (c.vars || []).some(cv => hit(cv.value)))
+    );
+  } else if (scope === 'graph') {
+    const g = graphs.find(g => g.id === graphId);
+    if (!g) return true;
+    if ((g.vars || []).some(v => hit(v.value))) return true;
+    return g.curves.some(c => hit(c.formula) || (c.vars || []).some(cv => hit(cv.value)));
+  } else {
+    const fi = document.getElementById('edit-curve-formula');
+    return hit(fi ? fi.value : '') || currentEditCurveVars.some(v => hit(v.value));
+  }
+}
+
 // ===== VARIABLE ROW HTML =====
 function varRowHTML(scope, v, baseScope, graphId, isFirst, isLast) {
   let preview = '', isErr = false;
@@ -1504,8 +1529,9 @@ function varRowHTML(scope, v, baseScope, graphId, isFirst, isLast) {
       preview = (typeof res === 'number' && isFinite(res)) ? '\u2248\u00a0' + +res.toFixed(6) : '?';
     } catch(e) { preview = '✕'; isErr = true; }
   }
+  const unused = v.name && !isVarUsed(v.name, scope, graphId);
   const ga = graphId ? `'${graphId}'` : 'null';
-  return `<div class="var-row" id="vrow-${scope}-${v.id}">
+  return `<div class="var-row${unused ? ' var-unused' : ''}" id="vrow-${scope}-${v.id}" title="${unused ? 'Variable non utilisée dans aucune équation' : ''}">
     <div class="var-move-btns">
       <button class="btn btn-ghost btn-icon var-move-btn" onclick="moveVar('${scope}','${v.id}',-1,${ga})" ${isFirst ? 'disabled' : ''} title="Monter">↑</button>
       <button class="btn btn-ghost btn-icon var-move-btn" onclick="moveVar('${scope}','${v.id}',1,${ga})" ${isLast ? 'disabled' : ''} title="Descendre">↓</button>
