@@ -27,6 +27,8 @@ Chaque graphique possède :
 
 Les graphiques sont **réordonnables** via les boutons ↑ ↓ dans l'en-tête de chaque carte.
 
+Chaque carte est **repliable** en cliquant sur le bouton ▼/▶ dans l'en-tête (ou sur l'en-tête lui-même), pour gagner de la place sans supprimer le graphique.
+
 ---
 
 ### Courbes
@@ -76,6 +78,16 @@ b = a * 2    → b vaut 20
 
 Chaque variable affiche une préview `≈ valeur` calculée en temps réel.
 
+#### Libellés de variables
+
+Chaque variable dispose d'un champ **libellé** optionnel (purement cosmétique). Il permet de documenter à quoi correspond une clé courte :
+
+```
+k  =  7    libellé : "nombre de jours par semaine"
+```
+
+Lorsqu'une variable possède un libellé, son nom apparaît **souligné en pointillés** dans les formules des courbes. Survoler ce nom affiche le libellé dans une info-bulle.
+
 ---
 
 ### Syntaxe mathjs
@@ -114,11 +126,9 @@ Toutes les données (graphiques, courbes, variables, paramètres) sont **sauvega
 
 Les boutons **↓ Exporter** et **↑ Importer** dans l'en-tête permettent de :
 - **Exporter** : télécharge un fichier `visuGraph_YYYY-MM-DD.json` contenant tous les graphiques, courbes et variables globales.
-- **Importer** : charge un fichier JSON précédemment exporté, en remplaçant l'état actuel (avec sauvegarde dans le localStorage).
+- **Importer** : charge un fichier JSON précédemment exporté et **l'ajoute à la configuration existante** sans l'écraser. Les IDs sont régénérés pour éviter les doublons.
 
 Le format JSON est rétro-compatible avec les exports sans variables globales.
-
----
 
 ---
 
@@ -182,7 +192,7 @@ icon.svg                          ← icône PWA
 ```json
 localStorage["visuGraph_data"] = {
   "version": 1,
-  "globalVars": [{ "id": "...", "name": "k", "value": "7" }],
+  "globalVars": [{ "id": "...", "name": "k", "value": "7", "label": "jours par semaine" }],
   "graphs": [{
     "id": "...",
     "name": "Mon graphique",
@@ -190,8 +200,9 @@ localStorage["visuGraph_data"] = {
     "xmin": 0, "xmax": 100, "xstep": 1,
     "xlabel": "", "ylabel": "",
     "yAuto": true, "ymin": 0, "ymax": 100,
-    "vars": [{ "id": "...", "name": "factor", "value": "2" }],
+    "vars": [{ "id": "...", "name": "factor", "value": "2", "label": "" }],
     "varsCollapsed": true,
+    "collapsed": false,
     "curves": [{
       "id": "...",
       "name": "Semaines",
