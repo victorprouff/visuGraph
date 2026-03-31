@@ -1211,14 +1211,25 @@ function formulaWithTooltips(formula, labelMap) {
   return result + esc(formula.slice(lastIndex));
 }
 
+function buildVarLabelMap(g) {
+  const scope = getGraphScope(g);
+  const map = {};
+  [...globalVars, ...(g.vars || [])].forEach(v => {
+    if (!v.name) return;
+    const val = scope[v.name];
+    const preview = val !== undefined ? '\u2248\u00a0' + +val.toFixed(6) : '';
+    const tip = v.label ? (preview ? v.label + ' = ' + preview : v.label) : preview;
+    if (tip) map[v.name] = tip;
+  });
+  return map;
+}
+
 function graphCardHTML(g) {
   const idx = graphs.findIndex(gg => gg.id === g.id);
   const isFirst = idx === 0;
   const isLast = idx === graphs.length - 1;
 
-  const varLabelMap = {};
-  globalVars.forEach(v => { if (v.name && v.label) varLabelMap[v.name] = v.label; });
-  (g.vars || []).forEach(v => { if (v.name && v.label) varLabelMap[v.name] = v.label; });
+  const varLabelMap = buildVarLabelMap(g);
 
   const curvesHTML = g.curves.map(c => `
     <div class="curve-row ${c.enabled ? '' : 'curve-disabled'}" id="curve-row-${c.id}">
@@ -1572,11 +1583,8 @@ function renameVarReferences(scope, oldName, newName, graphId) {
   function updateFormulaSpan(curveId, formula, g) {
     const span = document.querySelector('#curve-row-' + curveId + ' .curve-formula');
     if (!span) return;
-    const lm = {};
-    globalVars.forEach(v => { if (v.name && v.label) lm[v.name] = v.label; });
-    (g.vars || []).forEach(v => { if (v.name && v.label) lm[v.name] = v.label; });
     span.title = formula;
-    span.innerHTML = formulaWithTooltips(formula, lm);
+    span.innerHTML = formulaWithTooltips(formula, buildVarLabelMap(g));
   }
 
   if (scope === 'global') {
