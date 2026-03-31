@@ -878,6 +878,7 @@ function migrateData() {
   graphs.forEach(g => {
     if (!g.vars) g.vars = [];
     if (g.varsCollapsed === undefined) g.varsCollapsed = true;
+    if (g.collapsed === undefined) g.collapsed = false;
     (g.curves || []).forEach(c => { if (!c.vars) c.vars = []; });
   });
 }
@@ -902,6 +903,7 @@ function addGraph() {
     ymax: 100,
     vars: [],
     varsCollapsed: true,
+    collapsed: false,
     curves: [],
     showAddForm: false,
     curvesCollapsed: false
@@ -1116,6 +1118,18 @@ function toggleCurvesCollapse(graphId) {
   }
 }
 
+// ===== TOGGLE GRAPH COLLAPSE =====
+function toggleGraphCollapse(graphId) {
+  const g = graphs.find(g => g.id === graphId);
+  if (!g) return;
+  g.collapsed = !g.collapsed;
+  save();
+  const body = document.getElementById('graph-body-' + graphId);
+  const btn = document.getElementById('graph-collapse-btn-' + graphId);
+  if (body) body.style.display = g.collapsed ? 'none' : 'block';
+  if (btn) { btn.textContent = g.collapsed ? '▶' : '▼'; btn.title = g.collapsed ? 'Déplier' : 'Replier'; }
+}
+
 // ===== TOGGLE ADD FORM =====
 function toggleAddForm(graphId) {
   const g = graphs.find(g => g.id === graphId);
@@ -1203,16 +1217,17 @@ function graphCardHTML(g) {
   const defaultCurveName = 'Courbe ' + (g.curves.length + 1);
 
   return `
-    <div class="graph-header">
+    <div class="graph-header" onclick="toggleGraphCollapse('${g.id}')" style="cursor:pointer">
       <span class="graph-title" title="${esc(g.name)}">${esc(g.name)}</span>
       <div class="graph-actions">
-        <button class="btn btn-ghost btn-icon" title="Paramètres" onclick="openEditGraph('${g.id}')">⚙</button>
-        <button class="btn btn-ghost btn-icon" title="Monter" onclick="moveGraph('${g.id}',-1)" ${isFirst ? 'disabled' : ''}>↑</button>
-        <button class="btn btn-ghost btn-icon" title="Descendre" onclick="moveGraph('${g.id}',1)" ${isLast ? 'disabled' : ''}>↓</button>
-        <button class="btn btn-danger btn-icon" title="Supprimer" onclick="removeGraph('${g.id}')">🗑</button>
+        <button class="curves-toggle-btn" id="graph-collapse-btn-${g.id}" title="${g.collapsed ? 'Déplier' : 'Replier'}" onclick="event.stopPropagation();toggleGraphCollapse('${g.id}')">${g.collapsed ? '▶' : '▼'}</button>
+        <button class="btn btn-ghost btn-icon" title="Paramètres" onclick="event.stopPropagation();openEditGraph('${g.id}')">⚙</button>
+        <button class="btn btn-ghost btn-icon" title="Monter" onclick="event.stopPropagation();moveGraph('${g.id}',-1)" ${isFirst ? 'disabled' : ''}>↑</button>
+        <button class="btn btn-ghost btn-icon" title="Descendre" onclick="event.stopPropagation();moveGraph('${g.id}',1)" ${isLast ? 'disabled' : ''}>↓</button>
+        <button class="btn btn-danger btn-icon" title="Supprimer" onclick="event.stopPropagation();removeGraph('${g.id}')">🗑</button>
       </div>
     </div>
-    <div class="graph-body">
+    <div class="graph-body" id="graph-body-${g.id}" style="display:${g.collapsed ? 'none' : 'block'}">
       <div class="yscale-row">
         <input type="checkbox" id="yauto-${g.id}" ${g.yAuto ? 'checked' : ''} onchange="toggleYScale('${g.id}',this.checked)">
         <label for="yauto-${g.id}">Échelle Y automatique</label>
@@ -1752,15 +1767,25 @@ function handleImportFile(input) {
       } else if (parsed.graphs) {
         importedGraphs = parsed.graphs; importedGlobalVars = parsed.globalVars || [];
       } else { throw new Error('Format invalide.'); }
-      Object.values(chartInstances).forEach(c => c.destroy());
-      chartInstances = {};
-      graphs = importedGraphs;
-      globalVars = importedGlobalVars;
+      // Fusion : on ajoute les graphiques importés à la configuration existante
+      // Les IDs sont régénérés pour éviter les collisions
+      importedGraphs.forEach(g => {
+        const clone = JSON.parse(JSON.stringify(g));
+        clone.id = uid();
+        clone.curves = (clone.curves || []).map(c => ({ ...c, id: uid() }));
+        (clone.vars || []).forEach(v => { v.id = uid(); });
+        graphs.push(clone);
+      });
+      importedGlobalVars.forEach(v => {
+        const clone = { ...v, id: uid() };
+        globalVars.push(clone);
+      });
       migrateData();
       save();
       renderAll();
       renderGlobalVarRows();
-      showToast(`${graphs.length} graphique(s) importé(s).`);
+      const ng = importedGraphs.length, nv = importedGlobalVars.length;
+      showToast(`${ng} graphique(s) et ${nv} variable(s) globale(s) ajouté(s).`);
     } catch(err) {
       alert('Erreur d\'import : ' + err.message);
     }
