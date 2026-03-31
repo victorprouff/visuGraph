@@ -1494,7 +1494,10 @@ function varRowHTML(scope, v, baseScope, graphId) {
   const ga = graphId ? `'${graphId}'` : 'null';
   return `<div class="var-row" id="vrow-${scope}-${v.id}">
     <input class="var-name-input" value="${esc(v.name)}" placeholder="k"
-           oninput="setVarField('${scope}','${v.id}','name',this.value,${ga})" title="Nom de la variable">
+           onfocus="this.dataset.orig=this.value"
+           oninput="setVarField('${scope}','${v.id}','name',this.value,${ga})"
+           onblur="commitVarRename(this,'${scope}','${v.id}',${ga})"
+           title="Nom de la variable">
     <span class="var-eq">=</span>
     <input class="var-value-input" value="${esc(v.value)}" placeholder="3.14"
            oninput="setVarField('${scope}','${v.id}','value',this.value,${ga})">
@@ -1554,6 +1557,64 @@ function deleteVar(scope, varId, graphId) {
     if (g) { g.vars = (g.vars||[]).filter(v => v.id !== varId); save(); updateChart(g); }
   } else {
     currentEditCurveVars = currentEditCurveVars.filter(v => v.id !== varId);
+  }
+}
+
+function renameVarReferences(scope, oldName, newName, graphId) {
+  if (!oldName || !newName || oldName === newName) return;
+  const re = new RegExp('\\b' + oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+  function sub(text) { return typeof text === 'string' ? text.replace(re, newName) : text; }
+
+  function updateDOMValueInput(rowId) {
+    const inp = document.querySelector('#' + rowId + ' .var-value-input');
+    if (inp) inp.value = sub(inp.value);
+  }
+  function updateFormulaSpan(curveId, formula, g) {
+    const span = document.querySelector('#curve-row-' + curveId + ' .curve-formula');
+    if (!span) return;
+    const lm = {};
+    globalVars.forEach(v => { if (v.name && v.label) lm[v.name] = v.label; });
+    (g.vars || []).forEach(v => { if (v.name && v.label) lm[v.name] = v.label; });
+    span.title = formula;
+    span.innerHTML = formulaWithTooltips(formula, lm);
+  }
+
+  if (scope === 'global') {
+    globalVars.forEach(v => { v.value = sub(v.value); updateDOMValueInput('vrow-global-' + v.id); });
+    graphs.forEach(g => {
+      (g.vars || []).forEach(v => { v.value = sub(v.value); updateDOMValueInput('vrow-graph-' + v.id); });
+      g.curves.forEach(c => {
+        c.formula = sub(c.formula);
+        updateFormulaSpan(c.id, c.formula, g);
+        (c.vars || []).forEach(v => { v.value = sub(v.value); updateDOMValueInput('vrow-curve-' + v.id); });
+      });
+    });
+  } else if (scope === 'graph') {
+    const g = graphs.find(g => g.id === graphId);
+    if (!g) return;
+    (g.vars || []).forEach(v => { v.value = sub(v.value); updateDOMValueInput('vrow-graph-' + v.id); });
+    g.curves.forEach(c => {
+      c.formula = sub(c.formula);
+      updateFormulaSpan(c.id, c.formula, g);
+      (c.vars || []).forEach(v => { v.value = sub(v.value); updateDOMValueInput('vrow-curve-' + v.id); });
+    });
+  } else {
+    currentEditCurveVars.forEach(v => { v.value = sub(v.value); updateDOMValueInput('vrow-curve-' + v.id); });
+    const fi = document.getElementById('edit-curve-formula');
+    if (fi) fi.value = sub(fi.value);
+  }
+}
+
+function commitVarRename(input, scope, varId, graphId) {
+  const origName = input.dataset.orig;
+  delete input.dataset.orig;
+  const newName = input.value;
+  if (!origName || !newName || origName === newName) return;
+  renameVarReferences(scope, origName, newName, graphId);
+  if (scope !== 'curve') {
+    save();
+    if (scope === 'global') graphs.forEach(g => updateChart(g));
+    else { const g = graphs.find(g => g.id === graphId); if (g) updateChart(g); }
   }
 }
 
